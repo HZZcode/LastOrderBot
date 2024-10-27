@@ -1,5 +1,7 @@
 #-*-coding:utf-8-*-
 #网络模块导入
+from datetime import datetime
+
 import requests
 #json模块导入
 import demjson
@@ -24,7 +26,7 @@ SocketState = Config.SocketState
 live_heartbeat_interval = Config.live_heartbeat_interval
 live_id = Config.live_id
 liveDicState = Config.liveDicState
-msgutil = MsgUtil(headers,csrf_token,robotUid)
+msgutil = MsgUtil(headers, csrf_token, robotUid)
 
 
 def run():
@@ -38,26 +40,29 @@ def run():
         liveThread = threading.Thread(target=liveBroadcastRun)
         liveThread.start()
 
+    thisTime: float = 0
+    previousTime: float = 0
+
     #给操作类必要参数，后面你可以自己补充
     while (True):
         time.sleep(heartbeatInterval)
         #获取时间戳
-        thisTime = time.time()
-        #精确改变
-        thisTime = round(thisTime * 1000000)
+        previousTime = int(time.time() * 1000000) if thisTime is 0 else thisTime
+        thisTime = time.time() * 1000000
         #心跳导致的延误时间计算
         #thisHeartbeatInterval 这里减去0.2是因为我发现直接减去延迟时间会导致检测为撤回消息，这个是因为获取太早了，把上一次信息拿到了
-        thisHeartbeatInterval = heartbeatInterval - 0.2;
+        thisHeartbeatInterval = heartbeatInterval - 0.2
         pastTime = round(thisHeartbeatInterval * 1000000)
         #获取正确时间戳
         thisTime = int(thisTime) - pastTime
         #请求信息接口
-        newMsgGet =  requests.get("https://api.vc.bilibili.com/session_svr/v1/session_svr/new_sessions?begin_ts="+str(thisTime)+"&build=0&mobi_app=web",headers=headers)
+        newMsgGet = requests.get("https://api.vc.bilibili.com/session_svr/v1/session_svr/new_sessions?begin_ts=" + str(
+            previousTime) + "&build=0&mobi_app=web", headers=headers)
         newMsgGet.encoding = 'utf-8'
         newMsg = demjson.decode(newMsgGet.text)
         #判断是否有新消息
-        print(newMsg)
-        if bool("session_list" in str(newMsg)) & operator.not_("'session_list': None" in str(newMsg)) :
+        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3], thisTime, newMsg)
+        if bool("session_list" in str(newMsg)) & operator.not_("'session_list': None" in str(newMsg)):
             i = 0
             #拉取新消息条数
             while i < len(newMsg['data']['session_list']):
@@ -72,8 +77,8 @@ def run():
                 ack_seqno = int(newMsgJson["max_seqno"])
                 if robotUid == int(receiverId):
                     #消息阅读
-                    dic.updateAck(senderUid,ack_seqno,csrf_token)
-                    webHookThread = threading.Thread(target=webHook,args=(newMsg,1))
+                    dic.updateAck(senderUid, ack_seqno, csrf_token)
+                    webHookThread = threading.Thread(target=webHook, args=(newMsg, 1))
                     # start启动线程
                     webHookThread.start()
                     #dic 词库激活状态
@@ -81,23 +86,23 @@ def run():
                         #消息类型 1是文本 2是图片
                         msg_type = newMsgJson["last_msg"]["msg_type"]
                         #消判信息
-                        if unread_count >= 1 :
+                        if unread_count >= 1:
                             if msg_type == 1:
                                 MsgJson = demjson.decode(newMsgJson["last_msg"]["content"])
                                 Msg = MsgJson['content']
-                                dic.sendText(Msg,receiverId,senderUid)
-                            elif msg_type == 2 :
+                                dic.sendText(Msg, receiverId, senderUid)
+                            elif msg_type == 2:
                                 imageJson = demjson.decode(newMsgJson["last_msg"]["content"])
-                                dic.sendImage(imageJson,receiverId,senderUid)
+                                dic.sendImage(imageJson, receiverId, senderUid)
                         elif unread_count == 0:
                             if msg_type == 1:
                                 MsgJson = demjson.decode(newMsgJson["last_msg"]["content"])
                                 Msg = MsgJson['content']
-                                dic.withdrawText(Msg,receiverId,senderUid)
-                            elif msg_type == 2 :
+                                dic.withdrawText(Msg, receiverId, senderUid)
+                            elif msg_type == 2:
                                 print(newMsgJson["last_msg"]["content"])
                                 imageJson = demjson.decode(newMsgJson["last_msg"]["content"])
-                                dic.withdrawImage(imageJson,receiverId,senderUid)
+                                dic.withdrawImage(imageJson, receiverId, senderUid)
                 i = i + 1
 
         else:
@@ -130,15 +135,17 @@ $array = [
 echo json_encode($array, JSON_UNESCAPED_UNICODE);
 
 '''
-def webHook(newJson,key):
+
+
+def webHook(newJson, key):
     if webHookState:
         headers = {
-        'Connection': 'close',
-        'Content-Type': 'application/json;charset=UTF-8'
+            'Connection': 'close',
+            'Content-Type': 'application/json;charset=UTF-8'
         }
         i = 0
         while i < len(webHookUrl):
-            webHookMsgStr = requests.post(url=webHookUrl[i], data=demjson.encode(newJson),headers=headers)
+            webHookMsgStr = requests.post(url=webHookUrl[i], data=demjson.encode(newJson), headers=headers)
             # 挂钩词库事件
             if webHookDicState:
                 MsgJson = demjson.decode(webHookMsgStr.text)
@@ -152,14 +159,14 @@ def webHook(newJson,key):
                 senderUid = MsgJson["senderuid"]
                 print(msg_type)
                 if msg_type == 1:
-                    print(msgutil.sendMsg(msg,senderUid,receiverId))
+                    print(msgutil.sendMsg(msg, senderUid, receiverId))
                 elif msg_type == 2:
                     imageUrl = msgutil.captureIamgeUrl(msg)
                     imageFormat = msgutil.getImageFormat(imageUrl)
                     imageWidth = imageFormat[0]
                     imageHeight = imageFormat[1]
                     imageFormat = imageFormat[2]
-                    msgutil.sendImage(imageUrl,senderUid,receiverId,imageWidth,imageHeight,imageFormat)
+                    msgutil.sendImage(imageUrl, senderUid, receiverId, imageWidth, imageHeight, imageFormat)
                 pass
             i = i + 1
 
@@ -167,15 +174,15 @@ def webHook(newJson,key):
 #Socket 主要是用来作为外部通信的 假如你不会python语言，用其他的，就可以使用UDP通信
 def robotSocket():
     print("==============RobotUDP服务端已经启动===================")
-    host = '127.0.0.1' #主机号为空白表示可以使用任何可用的地址
-    port = 2233 #端口号
-    bufsiz = 1024 #接受数据缓冲大小
+    host = '127.0.0.1'  #主机号为空白表示可以使用任何可用的地址
+    port = 2233  #端口号
+    bufsiz = 1024  #接受数据缓冲大小
     addr = (host, port)
-    udpSerSock = socket(AF_INET, SOCK_DGRAM)#创建udp服务器套接字
-    udpSerSock.bind(addr) #套接字与地址绑定
+    udpSerSock = socket(AF_INET, SOCK_DGRAM)  #创建udp服务器套接字
+    udpSerSock.bind(addr)  #套接字与地址绑定
     while True:
         print('等待接收消息...')
-        data, addr = udpSerSock.recvfrom(bufsiz)#连续接受指定字节的数据，接收到的是字节数组
+        data, addr = udpSerSock.recvfrom(bufsiz)  #连续接受指定字节的数据，接收到的是字节数组
         MsgJson = demjson.decode(data)
         msg = MsgJson["msg"]
         # TODO 发送类型 1 是文本类型 Msg代表发送文本 2 是图片类型 Msg代表图片链接，，，，这必须是
@@ -186,17 +193,17 @@ def robotSocket():
         senderUid = MsgJson["senderuid"]
         print(msg_type)
         if msg_type == 1:
-            print(msgutil.sendMsg(msg,senderUid,receiverId))
+            print(msgutil.sendMsg(msg, senderUid, receiverId))
         elif msg_type == 2:
             imageUrl = msgutil.captureIamgeUrl(msg)
             imageFormat = msgutil.getImageFormat(imageUrl)
             imageWidth = imageFormat[0]
             imageHeight = imageFormat[1]
             imageFormat = imageFormat[2]
-            msgutil.sendImage(imageUrl,senderUid,receiverId,imageWidth,imageHeight,imageFormat)
-        udpSerSock.sendto(bytes(data.decode('utf-8'), 'utf-8'), addr)#向客户端发送时间戳数据，必须发送字节数组
+            msgutil.sendImage(imageUrl, senderUid, receiverId, imageWidth, imageHeight, imageFormat)
+        udpSerSock.sendto(bytes(data.decode('utf-8'), 'utf-8'), addr)  #向客户端发送时间戳数据，必须发送字节数组
         print('响应消息到', addr)
-    udpSerSock.close()#关闭服务器
+    udpSerSock.close()  #关闭服务器
 
 
 #直播函数
@@ -209,7 +216,8 @@ def liveBroadcastRun():
         #暂停一段时间
         time.sleep(live_heartbeat_interval)
         #请求接口开始轮询
-        newMsgGet =  requests.get("https://api.live.bilibili.com/xlive/web-room/v1/dM/gethistory?roomid="+str(live_id),headers=headers)
+        newMsgGet = requests.get("https://api.live.bilibili.com/xlive/web-room/v1/dM/gethistory?roomid=" + str(live_id),
+                                 headers=headers)
         newMsgGet.encoding = 'utf-8'
         newMsg = demjson.decode(newMsgGet.text)
         #获取普通用户弹幕
@@ -233,16 +241,12 @@ def liveBroadcastRun():
                         #信息不存在则添加鸡记录信息
                         msg_dictionary.append(msgTime)
                         #推送消息
-                        dic.liveSendText(Msg,live_id)
+                        dic.liveSendText(Msg, live_id)
                         #判断数组是否达到峰值，如果达到则清空
                         if len(msg_dictionary) > max_count:
-                            del msg_dictionary[0:max_count-10]
+                            del msg_dictionary[0:max_count - 10]
                             pass
                 else:
                     #不存在则否则记录
                     msg_dictionary.append(msgTime)
             i = i + 1
-            
-    
-
-
