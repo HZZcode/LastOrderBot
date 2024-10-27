@@ -74,6 +74,7 @@ def run():
                 #参见https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/message/private_msg.md
                 msg_source=newMsgJson["last_msg"]["msg_source"]
                 if not (msg_source in (0, 1, 2, 3, 4, 7)):
+                    i+=1
                     continue
                 #撤回消息与否 1是发送 0是撤回
                 unread_count = newMsgJson["unread_count"]
