@@ -1,3 +1,10 @@
+# LastOrderBot - forked by HZZ
+ 此项目为已经停更的[LastOrderBot](https://github.com/1250422131/LastOrderBot)的非官方分支。
+ 
+ 并不保证能够活跃开发，仅仅是为了满足自己的使用需求，同时修复一些遇到的原项目的bug。
+ 
+ 以下为原README.md的内容。
+
 # LastOrderBot
  LastOrderBot是一款B站机器人
  使用**LastOrderBot**可以帮助你轻松搭建属于自己的B站机器人
