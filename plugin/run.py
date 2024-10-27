@@ -1,8 +1,7 @@
 #-*-coding:utf-8-*-
 #网络模块导入
-from datetime import datetime
-
 import requests
+from datetime import datetime
 #json模块导入
 import demjson
 import time
@@ -71,6 +70,11 @@ def run():
                 receiverId = newMsgJson["last_msg"]["receiver_id"]
                 #用户ID
                 senderUid = newMsgJson["last_msg"]['sender_uid']
+                #消息来源，用于排除系统消息和自动回复
+                #参见https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/message/private_msg.md
+                msg_source=newMsgJson["last_msg"]["msg_source"]
+                if not (msg_source in (0, 1, 2, 3, 4, 7)):
+                    continue
                 #撤回消息与否 1是发送 0是撤回
                 unread_count = newMsgJson["unread_count"]
                 print(unread_count)
@@ -103,7 +107,7 @@ def run():
                                 print(newMsgJson["last_msg"]["content"])
                                 imageJson = demjson.decode(newMsgJson["last_msg"]["content"])
                                 dic.withdrawImage(imageJson, receiverId, senderUid)
-                i = i + 1
+                i += 1
 
         else:
             pass
